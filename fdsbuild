@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""FDS disk image builder
+"""
+
+import argparse
+import io
+import json
+import pathlib
+
+import fcdstools.fds  as fds
+import fcdstools.util as util
+
+def build(manifest, args):
+    mf_sides = manifest["sides"]
+
+    header = None if args.noheader else fds.FdsHeader(len(mf_sides))
+
+    sides = []
+    for mf_side in mf_sides:
+        sides.append(make_side(mf_side, args))
+
+    disk = fds.Fds(sides)
+
+    with io.BytesIO() as out:
+        fds.save(out, header, disk)
+        return out.getvalue()
+
+def make_side(mf_side, args):
+    mf_info = mf_side["info"]
+    info = fds.FdsInfo(
+        verification   = binary(mf_info["verification"]),
+        maker          = mf_info["maker"],
+        game_id        = binary(mf_info["game_id"]),
+        version        = mf_info["version"],
+        side_id        = mf_info["side_id"],
+        disk_id        = mf_info["disk_id"],
+        disk_type      = mf_info["disk_type"],
+        unknown1       = mf_info["unknown1"],
+        boot_file      = mf_info["boot_file"],
+        unknown2       = binary(mf_info["unknown2"]),
+        date           = binary(mf_info["date"]),
+        country        = mf_info["country"],
+        unknown3       = mf_info["unknown3"],
+        unknown4       = mf_info["unknown4"],
+        unknown5       = binary(mf_info["unknown5"]),
+        unknown6       = binary(mf_info["unknown6"]),
+        rewrite_date   = binary(mf_info["rewrite_date"]),
+        unknown7       = mf_info["unknown7"],
+        unknown8       = mf_info["unknown8"],
+        writer_serial  = binary(mf_info["writer_serial"]),
+        unknown9       = mf_info["unknown9"],
+        rewrite_count  = mf_info["rewrite_count"],
+        side_id_actual = mf_info["side_id_actual"],
+        unknown10      = mf_info["unknown10"],
+        version_debug  = mf_info["version_debug"],
+    )
+
+    amount = mf_side["amount"]
+
+    files = []
+    for mf_file in mf_side["files"]:
+        files.append(make_file(mf_file, args))
+
+    return fds.FdsSide(info, amount, files)
+
+def make_file(mf_file, args):
+    path = args.srcdir.joinpath(pathlib.Path(mf_file["path"]))
+    with open(path, "rb") as in_:
+        data = in_.read()
+    print(path)
+
+    h = fds.FdsFileHeader(
+        seq_num = mf_file["seq_num"],
+        id      = mf_file["id"],
+        name    = util.nulpad(binary(mf_file["name"]), 8),
+        addr    = mf_file["addr"],
+        size    = len(data),
+        type    = mf_file["type"],
+    )
+
+    return fds.FdsFile(h, data)
+
+def binary(dic):
+    return util.AsciiSafe.from_dict(dic).to_bytes()
+
+def parse_args():
+    DESC = "FDS disk image builder"
+
+    ap = argparse.ArgumentParser(description=DESC)
+    ap.add_argument("--srcdir", "-d", type=pathlib.Path, default=pathlib.Path(),
+                    help="source directory")
+    ap.add_argument("--noheader", action="store_true",
+                    help="build FDS without header")
+    ap.add_argument("outfile", type=pathlib.Path,
+                    help="output FDS file")
+    ap.add_argument("manifest", type=arg_json,
+                    help="manifest.json")
+    return ap.parse_args()
+
+def arg_json(s):
+    try:
+        with open(s, "r") as in_:
+            return json.load(in_)
+    except Exception as e:
+        raise argparse.ArgumentTypeError(f"{e}")
+
+def main():
+    args = parse_args()
+
+    buf = build(args.manifest, args)
+
+    with open(args.outfile, "wb") as out:
+        out.write(buf)
+
+if __name__ == "__main__": main()

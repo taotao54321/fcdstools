@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""FDS Study Database (Type-B) to JSON converter
+
+Ref: http://www.geocities.jp/gponys/fmcmdskw11.html
+"""
+
+import argparse
+import json
+import sys
+
+import fcdstools.fdssdb as fdssdb
+
+def parse_args():
+    DESC = "FDS Study Database (Type-B) to JSON converter"
+
+    ap = argparse.ArgumentParser(description=DESC)
+    ap.add_argument("in_", nargs="?", type=argparse.FileType("r"), default=sys.stdin,
+                    metavar="DB", help="input file")
+    return ap.parse_args()
+
+def main():
+    args = parse_args()
+
+    with args.in_:
+        db = fdssdb.parse(args.in_)
+
+    print(json.dumps(db, indent=2))
+
+if __name__ == "__main__": main()

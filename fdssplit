@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""FDS disk image splitter
+"""
+
+import argparse
+import pathlib
+import sys
+
+import fcdstools.fds as fds
+
+def warn(msg):
+    print(msg, file=sys.stderr)
+
+def split(in_, args):
+    res = True
+
+    header, disk = fds.load(in_)
+
+    if args.destdir: args.destdir.mkdir(exist_ok=True)
+    destdir = args.destdir if args.destdir else pathlib.Path()
+
+    for i, side in enumerate(disk.sides):
+        for j, f in enumerate(side.files):
+            h = f.header
+            fname = pathlib.Path(fds.sanitize_filename(h.name, i, j))
+            path  = destdir.joinpath(fname)
+            if not extract_one(path, f.data, args.force):
+                res = False
+
+    return res
+
+def extract_one(path, data, force):
+    if not force and path.exists():
+        warn(f"{path}: file exists")
+        return False
+
+    with open(path, "wb") as out:
+        out.write(data)
+    print(path)
+
+    return True
+
+def parse_args():
+    DESC = "FDS disk image splitter"
+
+    ap = argparse.ArgumentParser(description=DESC)
+    ap.add_argument("--destdir", "-d", type=pathlib.Path,
+                    help="destination directory")
+    ap.add_argument("--force", "-f", action="store_true",
+                    help="overwrite existing files")
+    ap.add_argument("in_", type=argparse.FileType("rb"),
+                    metavar="FDS", help="input file")
+    return ap.parse_args()
+
+def main():
+    args = parse_args()
+
+    with args.in_:
+        ok = split(args.in_, args)
+
+    sys.exit(0 if ok else 1)
+
+if __name__ == "__main__": main()

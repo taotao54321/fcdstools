@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""FDS disk image checker
+"""
+
+import argparse
+import calendar
+import json
+
+from tabulate import tabulate
+
+import fcdstools.fds    as fds
+import fcdstools.fdssdb as fdssdb
+import fcdstools.util   as util
+
+def decode_bcd(b):
+    d1 = b >> 4
+    d2 = b &  0xF
+    if d1 >= 10 or d2 >= 10: return None
+    return 10*d1 + d2
+
+# plain format {{{
+def report_plain(header, disk, db_record, db_matches):
+    print("FDS with header:", "yes" if header else "no")
+    if header and header.side_count != len(disk.sides):
+        print(f"Warn: side count in the header seems wrong: {header.side_count}")
+    print()
+
+    title = db_record["title"] if db_record else "Unknown"
+    print(f"Title: {title}")
+    print()
+
+    for i, side in enumerate(disk.sides):
+        info = side.info
+        table_info = (
+            ("game id",       info.game_id),
+            ("country",       f"{info.country} ({country_str(info.country)})"),
+            ("maker",         f"{info.maker} ({maker_str(info.maker)})"),
+            ("version",       info.version),
+            ("disk number",   info.disk_id),
+            ("disk side",
+             f"{info.side_id} ({disk_side_str(info.side_id)})"),
+            ("disk side (actual)",
+             f"{info.side_id_actual} ({disk_side_str(info.side_id_actual)})"),
+            ("disk type",
+             f"{info.disk_type} ({disk_type_str(info.disk_type)})"),
+            ("boot file",     info.boot_file),
+            ("date (hex)",    f"{info.date.hex()} ({date_str(info.date)})"),
+            ("rewrite date (hex)",
+             f"{info.rewrite_date.hex()} ({date_str(info.rewrite_date)})"),
+            ("rewrite count", f"0x{info.rewrite_count:02x}"),
+            ("writer serial (hex)", info.writer_serial.hex()),
+            ("debug version", info.version_debug),
+        )
+        print(f"[side #{i}]")
+        print(tabulate(table_info, tablefmt="simple"))
+        print()
+
+    for i, side in enumerate(disk.sides):
+        theaders = ("seq", "id", "name", "size", "addr", "type", "db")
+        table_files = []
+        for j, f in enumerate(side.files):
+            h = f.header
+            db_ok = db_matches and db_matches[i][j]
+            table_files.append((
+                h.seq_num,
+                h.id,
+                repr(h.name.rstrip(b"\x00")), # avoid UnicodeDecodeError
+                h.size,
+                f"${h.addr:04X}",
+                f"{h.type} ({file_type_str(h.type)})",
+                db_ok,
+            ))
+        print(f"[side #{i} files]")
+        print(tabulate(table_files, headers=theaders, tablefmt="simple"))
+        print()
+
+def country_str(n):
+    return {
+        0x49 : "Japan",
+    }.get(n, "Unknown")
+
+def maker_str(n):
+    return {
+        0x01 : "Nintendo",
+        0x08 : "Capcom",
+        0x0A : "Jaleco",
+        0x18 : "Hudson Soft",
+        0x49 : "Irem",
+        0x4A : "Gakken",
+        0x8B : "BulletProof Software (BPS)",
+        0x99 : "Pack-In-Video",
+        0x9B : "Tecmo",
+        0x9C : "Imagineer",
+        0xA2 : "Scorpion Soft",
+        0xA4 : "Konami",
+        0xA6 : "Kawada Co., Ltd.",
+        0xA7 : "Takara",
+        0xA8 : "Royal Industries",
+        0xAC : "Toei Animation",
+        0xAF : "Namco",
+        0xB1 : "ASCII Corporation",
+        0xB2 : "Bandai",
+        0xB3 : "Soft Pro Inc.",
+        0xB6 : "HAL Laboratory",
+        0xBB : "Sunsoft",
+        0xBC : "Toshiba EMI",
+        0xC0 : "Taito",
+        0xC1 : "Sunsoft / Ask Co., Ltd.",
+        0xC2 : "Kemco",
+        0xC3 : "Square",
+        0xC4 : "Tokuma Shoten",
+        0xC5 : "Data East",
+        0xC6 : "Tonkin House/Tokyo Shoseki",
+        0xC7 : "East Cube",
+        0xCA : "Konami / Ultra / Palcom",
+        0xCB : "NTVIC / VAP",
+        0xCC : "Use Co., Ltd.",
+        0xCE : "Pony Canyon / FCI",
+        0xD1 : "Sofel",
+        0xD2 : "Bothtec, Inc.",
+        0xDB : "Hiro Co., Ltd.",
+        0xE7 : "Athena",
+        0xEB : "Atlus",
+    }.get(n, "Unknown")
+
+def disk_side_str(n):
+    return {
+        0 : "side-A",
+        1 : "side-B",
+    }.get(n, "Unknown")
+
+def disk_type_str(n):
+    return {
+        0 : "Normal",
+        1 : "Blue/Gold",
+    }.get(n, "Unknown")
+
+def date_str(buf):
+    STR_UNKNOWN = "Unknown"
+
+    y, m, d = map(decode_bcd, buf)
+    if any(e is None for e in (y,m,d)): return STR_UNKNOWN
+
+    if not 1 <= m <= 12: return STR_UNKNOWN
+
+    # Most games use Showa year.
+    # A few games use Heisei year, or Western year.
+    #
+    # FDS is released on 1986/02/21 (1986 = Showa 61)
+    if 86 <= y: # Western
+        year = 1900 + y
+    elif 61 <= y < 86: # Showa
+        year = 1925 + y
+    elif 1 <= y < 30: # Heisei
+        year = 1988 + y
+    else:
+        return STR_UNKNOWN
+
+    dom = calendar.monthrange(year, m)[1]
+    if not 1 <= d <= dom: return STR_UNKNOWN
+
+    return f"{year:04d}/{m:02d}/{d:02d}"
+
+def file_type_str(n):
+    return {
+        0 : "PRG",
+        1 : "CHR",
+        2 : "NT",
+    }.get(n, "Unknown")
+# }}}
+
+# manifest format {{{
+def report_manifest(header, disk, db_record, db_matches):
+    sides = []
+    for i, side in enumerate(disk.sides):
+        info = side.info
+        info_dic = dict(
+            verification   = asciisafe(info.verification),
+            game_id        = asciisafe(info.game_id),
+            country        = info.country,
+            maker          = info.maker,
+            version        = info.version,
+            disk_id        = info.disk_id,
+            side_id        = info.side_id,
+            side_id_actual = info.side_id_actual,
+            disk_type      = info.disk_type,
+            boot_file      = info.boot_file,
+            date           = asciisafe(info.date),
+            rewrite_date   = asciisafe(info.rewrite_date),
+            rewrite_count  = info.rewrite_count,
+            writer_serial  = asciisafe(info.writer_serial),
+            version_debug  = info.version_debug,
+            unknown1       = info.unknown1,
+            unknown2       = asciisafe(info.unknown2),
+            unknown3       = info.unknown3,
+            unknown4       = info.unknown4,
+            unknown5       = asciisafe(info.unknown5),
+            unknown6       = asciisafe(info.unknown6),
+            unknown7       = info.unknown7,
+            unknown8       = info.unknown8,
+            unknown9       = info.unknown9,
+            unknown10      = info.unknown10,
+        )
+
+        files = []
+        for j, f in enumerate(side.files):
+            h = f.header
+            files.append(dict(
+                path    = fds.sanitize_filename(h.name, i, j),
+                seq_num = h.seq_num,
+                id      = h.id,
+                name    = asciisafe(h.name.rstrip(b"\x00")),
+                addr    = h.addr,
+                type    = h.type,
+            ))
+
+        sides.append(dict(
+            info   = info_dic,
+            amount = side.amount,
+            files  = files,
+        ))
+
+    manifest = dict(sides=sides)
+
+    print(json.dumps(manifest, indent=2))
+
+def asciisafe(buf: bytes):
+    return util.AsciiSafe.from_bytes(buf).to_dict()
+# }}}
+
+REPORTERS = dict(
+    plain    = report_plain,
+    manifest = report_manifest,
+)
+
+def check(in_, args):
+    header, disk = fds.load(in_)
+
+    db_record, db_matches = fdssdb.match(args.db, disk) if args.db else (None, None)
+
+    report = REPORTERS[args.format]
+    report(header, disk, db_record, db_matches)
+
+def parse_args():
+    DESC = "FDS disk image checker"
+    ap = argparse.ArgumentParser(DESC)
+    ap.add_argument("--db", type=arg_json,
+                    metavar="JSON", help="use database")
+    ap.add_argument("--format", "-f", choices=sorted(REPORTERS), default="plain",
+                    help="output format")
+    ap.add_argument("in_", type=argparse.FileType("rb"),
+                    metavar="FDS", help="input file")
+    return ap.parse_args()
+
+def arg_json(s):
+    try:
+        with open(s, "r") as in_:
+            return json.load(in_)
+    except Exception as e:
+        raise argparse.ArgumentTypeError(f"{e}")
+
+def main():
+    args = parse_args()
+
+    with args.in_:
+        check(args.in_, args)
+
+if __name__ == "__main__": main()
