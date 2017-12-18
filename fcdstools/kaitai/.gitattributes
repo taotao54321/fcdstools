@@ -1,4 +1,3 @@
 fds_file_header_block.py -diff
 fds_header.py            -diff
 fds_info_block.py        -diff
-fds_regular.py           -diff
