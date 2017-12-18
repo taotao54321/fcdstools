@@ -62,5 +62,6 @@ Resources
 
 * `nesdev wiki <https://wiki.nesdev.com/w/index.php/Family_Computer_Disk_System>`_
 * `gponys' FDS resources <http://www.geocities.jp/gponys/fmcmdskw.html>`_
+* `Enri's FDS page <http://www43.tok2.com/home/cmpslv/Famic/Famdis.htm>`_
 
 
