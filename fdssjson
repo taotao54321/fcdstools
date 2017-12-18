@@ -26,6 +26,6 @@ def main():
     with args.in_:
         db = fdssdb.parse(args.in_)
 
-    print(json.dumps(db, indent=2))
+    print(json.dumps(db, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__": main()
