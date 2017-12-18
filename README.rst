@@ -7,7 +7,8 @@ disk image manipulation tools.
 
 ``fdscheck`` supports
 `FDS Study database <http://www.geocities.jp/gponys/fmcmdskw11.html>`_
-by gponys. To use it, convert it into JSON with ``fdssjson``.
+by `gponys <http://www.geocities.jp/gponys/>`_. To use it, convert it
+into JSON with ``fdssjson``.
 
 I wanted to name this "fdstools", but it had been already
 `taken <https://pypi.python.org/pypi/fdstools/>`_.
