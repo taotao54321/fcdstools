@@ -10,9 +10,6 @@ disk image manipulation tools.
 by `gponys <http://www.geocities.jp/gponys/>`_. To use it, convert it
 into JSON with ``fdssjson``.
 
-I wanted to name this "fdstools", but it had been already
-`taken <https://pypi.python.org/pypi/fdstools/>`_.
-
 
 Usage
 =====
