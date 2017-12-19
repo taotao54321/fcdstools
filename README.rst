@@ -46,6 +46,7 @@ Install
 Dependency
 ==========
 
+* Python >= 3.6
 * `kaitaistruct <https://pypi.python.org/pypi/kaitaistruct>`_
 * `tabulate <https://pypi.python.org/pypi/tabulate>`_
 
