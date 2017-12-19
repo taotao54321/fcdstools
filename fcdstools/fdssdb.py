@@ -41,7 +41,7 @@ def match(db, disk):
 
     # game id must be unique in a disk
     ids = set(side.info.game_id for side in disk.sides)
-    if len(ids) != 1: return None
+    if len(ids) != 1: return None, None
 
     # assume "strange" game id as unlicensed.
     game_id = ids.pop()
