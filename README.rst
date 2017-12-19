@@ -49,7 +49,7 @@ Install
 
 ::
 
-    $ pip install .
+    $ pip install fcdstools
 
 
 Dependency
