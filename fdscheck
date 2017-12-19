@@ -7,8 +7,10 @@
 import argparse
 import calendar
 import json
+import sys
 
-from tabulate import tabulate
+from pkg_resources import resource_filename
+from tabulate      import tabulate
 
 import fcdstools.fds    as fds
 import fcdstools.fdssdb as fdssdb
@@ -19,6 +21,9 @@ def decode_bcd(b):
     d2 = b &  0xF
     if d1 >= 10 or d2 >= 10: return None
     return 10*d1 + d2
+
+def warn(msg):
+    print(msg, file=sys.stderr)
 
 # plain format {{{
 def report_plain(header, disk, db_record, db_matches):
@@ -235,10 +240,10 @@ REPORTERS = dict(
     manifest = report_manifest,
 )
 
-def check(in_, args):
+def check(in_, db, args):
     header, disk = fds.load(in_)
 
-    db_record, db_matches = fdssdb.match(args.db, disk) if args.db else (None, None)
+    db_record, db_matches = fdssdb.match(db, disk) if db else (None, None)
 
     report = REPORTERS[args.format]
     report(header, disk, db_record, db_matches)
@@ -246,25 +251,33 @@ def check(in_, args):
 def parse_args():
     DESC = "FDS disk image checker"
     ap = argparse.ArgumentParser(DESC)
-    ap.add_argument("--db", type=arg_json,
-                    metavar="JSON", help="use database")
+    ap.add_argument("--db",
+                    metavar="JSON",
+                    help="use custom database (by default, use internal database)")
+    ap.add_argument("--nodb", action="store_true",
+                    help="do not use database")
     ap.add_argument("--format", "-f", choices=sorted(REPORTERS), default="plain",
                     help="output format")
     ap.add_argument("in_", type=argparse.FileType("rb"),
                     metavar="FDS", help="input file")
     return ap.parse_args()
 
-def arg_json(s):
+def load_db(args):
+    if args.nodb: return None
+
     try:
-        with open(s, "r") as in_:
+        path = args.db if args.db else resource_filename("fcdstools", "data/fdsdb.json")
+        with open(path, "r") as in_:
             return json.load(in_)
     except Exception as e:
-        raise argparse.ArgumentTypeError(f"{e}")
+        warn(f"failed to load database: {e}")
+        return None
 
 def main():
     args = parse_args()
+    db   = load_db(args)
 
     with args.in_:
-        check(args.in_, args)
+        check(args.in_, db, args)
 
 if __name__ == "__main__": main()
