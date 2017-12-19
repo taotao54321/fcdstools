@@ -30,6 +30,7 @@ setuptools.setup(
     keywords = "nes famicom disk system fds",
 
     install_requires = (
+        "setuptools",
         "kaitaistruct",
         "tabulate",
     ),
@@ -42,4 +43,12 @@ setuptools.setup(
         "fdssjson",
         "fdssplit",
     ),
+
+    package_data = {
+        "fcdstools" : (
+            "data/README.txt",
+            "data/fdsdb.json",
+            "data/fdsdb-ja.json",
+        ),
+    }
 )
