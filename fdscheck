@@ -67,7 +67,7 @@ def report_plain(header, disk, db_record, db_matches):
         table_files = []
         for j, f in enumerate(side.files):
             h = f.header
-            db_ok = db_matches and db_matches[i][j]
+            db_ok = db_matches[i][j] if db_matches else False
             table_files.append((
                 h.seq_num,
                 h.id,
