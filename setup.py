@@ -50,5 +50,5 @@ setuptools.setup(
             "data/fdsdb.json",
             "data/fdsdb-ja.json",
         ),
-    }
+    },
 )
